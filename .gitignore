@@ -1,0 +1,9 @@
+venv
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.npy
+*.h5
+*.task
+.DS_Store
