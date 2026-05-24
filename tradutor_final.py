@@ -8,11 +8,25 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 # --- CONFIGURAÇÕES ---
-ACTIONS = ["OI", "GOSTAR", "MELANCIA"]
+ACTIONS = [
+    "OI", "TCHAU", "EU", "NOME", "OBRIGADO", "SIM", "NAO",
+    "POR_FAVOR", "DESCULPA", "BEM", "GOSTAR", "AJUDA",
+    "ENTENDER", "NAO_ENTENDER", "REPETIR", "PRAZER", "AMIGO", "SURDO",
+    "MELANCIA", "LARANJA"
+]
 model_lstm = load_model('modelo_libras.h5')
 MODEL_PATH = Path("hand_landmarker.task")
 COORD_SIZE = 126
 FRAME_WINDOW = 30
+
+# Threshold de confiança mínima para aceitar predição
+threshold = 0.88
+# Desvio padrão mínimo das coordenadas ao longo dos frames (detecta movimento real)
+MOVEMENT_THRESHOLD = 0.008
+# Quantas predições consecutivas do mesmo sinal são necessárias para confirmar
+REQUIRED_CONFIRMATIONS = 4
+# Frames de cooldown após confirmar um sinal (evita repetição imediata)
+COOLDOWN_FRAMES = 20
 
 # --- FUNÇÃO OLLAMA ---
 def chamar_gemma(glossas):
@@ -43,10 +57,11 @@ cap = cv2.VideoCapture(0)
 sequence = []
 glossas_detectadas = []
 last_prediction = ""
-threshold = 0.85
+candidate_sign = ""
+consecutive_count = 0
+cooldown_counter = 0
 
-# -> NOVA VARIÁVEL PARA TELA <-
-traducao_final_tela = "Aguardando sinais..." 
+traducao_final_tela = "Aguardando sinais..."
 
 print("\n🚀 SISTEMA RODANDO - LIBRAS-SC")
 print("Espaço: Traduzir (Gemma) | C: Limpar Tela | Q: Sair\n")
@@ -63,31 +78,62 @@ while cap.isOpened():
     results = hand_landmarker.detect(mp_image)
 
     current_coords = np.zeros(COORD_SIZE)
-    
+
     if results.hand_landmarks:
-        all_pts = []
-        for hand_landmarks in results.hand_landmarks[:2]:
-            for lm in hand_landmarks:
-                all_pts.extend([lm.x, lm.y, lm.z])
-                # Feedback visual dos pontos
+        left_pts = [0.0] * 63
+        right_pts = [0.0] * 63
+        for hand_lms, handedness_list in zip(results.hand_landmarks, results.handedness):
+            label = handedness_list[0].category_name  # "Left" or "Right"
+            pts = []
+            for lm in hand_lms:
+                pts.extend([lm.x, lm.y, lm.z])
                 x_px, y_px = int(lm.x * image_w), int(lm.y * image_h)
                 cv2.circle(image, (x_px, y_px), 3, (0, 255, 0), -1)
-        
-        current_coords[:len(all_pts)] = all_pts
+            if label == "Left":
+                left_pts = pts
+            else:
+                right_pts = pts
+        # Left → slot 0 (0-62), Right → slot 1 (63-125), always consistent
+        current_coords[:] = left_pts + right_pts
 
     sequence.append(current_coords)
     sequence = sequence[-FRAME_WINDOW:]
 
+    if cooldown_counter > 0:
+        cooldown_counter -= 1
+
     if len(sequence) == FRAME_WINDOW:
-        input_data = np.expand_dims(sequence, axis=0)
-        res = model_lstm.predict(input_data, verbose=0)[0]
-        idx = np.argmax(res)
-        
-        if res[idx] > threshold:
-            pred_atual = ACTIONS[idx]
-            if pred_atual != last_prediction:
-                glossas_detectadas.append(pred_atual)
-                last_prediction = pred_atual
+        seq_array = np.array(sequence)
+
+        # Só prediz se há movimento real nas mãos (filtra mão parada / sem sinal)
+        movement = np.std(seq_array[:, :63], axis=0).mean()  # só coordenadas da mão 1
+        has_movement = movement > MOVEMENT_THRESHOLD
+
+        if has_movement and cooldown_counter == 0:
+            input_data = np.expand_dims(seq_array, axis=0)
+            res = model_lstm.predict(input_data, verbose=0)[0]
+            idx = np.argmax(res)
+
+            if res[idx] > threshold:
+                pred_atual = ACTIONS[idx]
+                if pred_atual == candidate_sign:
+                    consecutive_count += 1
+                else:
+                    candidate_sign = pred_atual
+                    consecutive_count = 1
+
+                if consecutive_count >= REQUIRED_CONFIRMATIONS and candidate_sign != last_prediction:
+                    glossas_detectadas.append(candidate_sign)
+                    last_prediction = candidate_sign
+                    consecutive_count = 0
+                    cooldown_counter = COOLDOWN_FRAMES
+            else:
+                consecutive_count = 0
+                candidate_sign = ""
+        elif not has_movement:
+            consecutive_count = 0
+            candidate_sign = ""
+            last_prediction = ""  # reset para aceitar o mesmo sinal após pausa
 
     # ==========================================
     # INTERFACE VISUAL (HUD)

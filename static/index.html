@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tradutor LIBRAS</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0f0f13;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 14px 24px;
+      background: #1a1a24;
+      border-bottom: 1px solid #2a2a3a;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: .5px; }
+    .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #444; transition: background .3s;
+    }
+    .dot.online { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
+
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 0;
+      overflow: hidden;
+    }
+
+    /* ---- CÂMERA ---- */
+    .camera-wrap {
+      position: relative;
+      background: #000;
+      overflow: hidden;
+    }
+    video {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+      display: block;
+    }
+    canvas#overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+    }
+
+    /* sinal detectado em cima do vídeo */
+    .sign-badge {
+      position: absolute;
+      top: 16px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,.65);
+      backdrop-filter: blur(6px);
+      border: 1px solid #ffffff22;
+      border-radius: 12px;
+      padding: 8px 24px;
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #fff;
+      min-width: 120px;
+      text-align: center;
+      transition: opacity .2s;
+    }
+    .sign-badge.empty { opacity: .3; }
+
+    /* barra de confiança */
+    .conf-bar-wrap {
+      position: absolute;
+      bottom: 20px; left: 50%;
+      transform: translateX(-50%);
+      width: 200px;
+    }
+    .conf-bar-bg {
+      background: rgba(0,0,0,.5);
+      border-radius: 6px;
+      height: 8px;
+      overflow: hidden;
+    }
+    .conf-bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      background: linear-gradient(90deg, #6366f1, #22c55e);
+      width: 0%;
+      transition: width .15s;
+    }
+    .conf-label {
+      text-align: center;
+      font-size: .7rem;
+      color: #aaa;
+      margin-top: 4px;
+    }
+
+    /* ---- PAINEL LATERAL ---- */
+    .panel {
+      background: #14141e;
+      border-left: 1px solid #2a2a3a;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .section {
+      padding: 16px;
+      border-bottom: 1px solid #2a2a3a;
+    }
+    .section-label {
+      font-size: .65rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    /* glossas */
+    .glossas {
+      min-height: 50px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-content: flex-start;
+    }
+    .glossa-chip {
+      background: #1e1e30;
+      border: 1px solid #3a3a5a;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: .8rem;
+      font-weight: 600;
+      color: #a5b4fc;
+      animation: pop .15s ease;
+    }
+    @keyframes pop {
+      from { transform: scale(.8); opacity: 0; }
+      to   { transform: scale(1);  opacity: 1; }
+    }
+
+    /* tradução */
+    .traducao {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+    .traducao p {
+      font-size: 1rem;
+      line-height: 1.6;
+      color: #d4d4d4;
+    }
+    .traducao .placeholder { color: #444; font-style: italic; }
+
+    /* spinner */
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid #666;
+      border-top-color: #a5b4fc;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* botões */
+    .actions {
+      padding: 14px 16px;
+      display: flex;
+      gap: 8px;
+      border-top: 1px solid #2a2a3a;
+    }
+    button {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      font-size: .85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    button:active { transform: scale(.97); }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+
+    #btn-translate {
+      background: linear-gradient(135deg, #6366f1, #818cf8);
+      color: #fff;
+    }
+    #btn-clear {
+      background: #1e1e30;
+      border: 1px solid #3a3a5a;
+      color: #aaa;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="dot" id="ws-dot"></div>
+  <h1>Tradutor LIBRAS</h1>
+</header>
+
+<main>
+  <!-- CÂMERA -->
+  <div class="camera-wrap">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlay"></canvas>
+
+    <div class="sign-badge empty" id="sign-badge">—</div>
+
+    <div class="conf-bar-wrap">
+      <div class="conf-bar-bg">
+        <div class="conf-bar-fill" id="conf-fill"></div>
+      </div>
+      <div class="conf-label" id="conf-label">aguardando sinal...</div>
+    </div>
+  </div>
+
+  <!-- PAINEL -->
+  <div class="panel">
+    <div class="section">
+      <div class="section-label">Sinais detectados</div>
+      <div class="glossas" id="glossas"></div>
+    </div>
+
+    <div class="traducao" id="traducao">
+      <p class="placeholder">Faça sinais e pressione <strong>Traduzir</strong>.</p>
+    </div>
+
+    <div class="actions">
+      <button id="btn-translate" disabled>Traduzir</button>
+      <button id="btn-clear">Limpar</button>
+    </div>
+  </div>
+</main>
+
+<canvas id="capture" style="display:none"></canvas>
+
+<script>
+  const video       = document.getElementById('video');
+  const overlay     = document.getElementById('overlay');
+  const ctx         = overlay.getContext('2d');
+  const capCanvas   = document.getElementById('capture');
+  const capCtx      = capCanvas.getContext('2d');
+  const signBadge   = document.getElementById('sign-badge');
+  const confFill    = document.getElementById('conf-fill');
+  const confLabel   = document.getElementById('conf-label');
+  const glossasEl   = document.getElementById('glossas');
+  const traducaoEl  = document.getElementById('traducao');
+  const btnTranslate= document.getElementById('btn-translate');
+  const btnClear    = document.getElementById('btn-clear');
+  const wsDot       = document.getElementById('ws-dot');
+
+  // --- CÂMERA ---
+  navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false })
+    .then(stream => {
+      video.srcObject = stream;
+      video.onloadedmetadata = () => {
+        overlay.width  = video.videoWidth;
+        overlay.height = video.videoHeight;
+        capCanvas.width  = video.videoWidth;
+        capCanvas.height = video.videoHeight;
+        startLoop();
+      };
+    })
+    .catch(err => alert('Câmera não disponível: ' + err.message));
+
+  // --- WEBSOCKET ---
+  let ws = null;
+  let wsReady = false;
+
+  function connectWS() {
+    ws = new WebSocket(`ws://${location.host}/ws`);
+
+    ws.onopen = () => {
+      wsReady = true;
+      wsDot.classList.add('online');
+    };
+
+    ws.onclose = () => {
+      wsReady = false;
+      wsDot.classList.remove('online');
+      setTimeout(connectWS, 2000); // reconecta automaticamente
+    };
+
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+
+      if (msg.type === 'frame_result') {
+        drawLandmarks(msg.landmarks);
+        updateSign(msg.current_sign, msg.confidence);
+        updateGlossas(msg.glossas);
+
+      } else if (msg.type === 'translation') {
+        showTranslation(msg.text);
+        btnTranslate.disabled = false;
+        btnTranslate.textContent = 'Traduzir';
+
+      } else if (msg.type === 'clear') {
+        glossasEl.innerHTML = '';
+        btnTranslate.disabled = true;
+        traducaoEl.innerHTML = '<p class="placeholder">Faça sinais e pressione <strong>Traduzir</strong>.</p>';
+      }
+    };
+  }
+
+  connectWS();
+
+  // --- LOOP DE CAPTURA ---
+  const FPS = 15;
+  const QUALITY = 0.85;
+
+  function startLoop() {
+    setInterval(() => {
+      if (!wsReady || ws.readyState !== WebSocket.OPEN) return;
+
+      capCtx.drawImage(video, 0, 0);
+      const b64 = capCanvas.toDataURL('image/jpeg', QUALITY).split(',')[1];
+      ws.send(JSON.stringify({ action: 'frame', frame: b64 }));
+    }, 1000 / FPS);
+  }
+
+  // --- DESENHA LANDMARKS ---
+  function drawLandmarks(landmarks) {
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+    if (!landmarks || landmarks.length === 0) return;
+
+    landmarks.forEach(lm => {
+      // espelha o X porque o vídeo está espelhado
+      const x = (1 - lm.x) * overlay.width;
+      const y = lm.y * overlay.height;
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#22c55e';
+      ctx.fill();
+    });
+  }
+
+  // --- ATUALIZA SINAL ---
+  function updateSign(sign, confidence) {
+    if (sign) {
+      signBadge.textContent = sign;
+      signBadge.classList.remove('empty');
+    } else {
+      signBadge.textContent = '—';
+      signBadge.classList.add('empty');
+    }
+    const pct = Math.round(confidence * 100);
+    confFill.style.width = pct + '%';
+    confLabel.textContent = sign ? `${sign} — ${pct}%` : 'aguardando sinal...';
+  }
+
+  // --- ATUALIZA GLOSSAS ---
+  let lastGlossaCount = 0;
+  function updateGlossas(glossas) {
+    if (glossas.length === lastGlossaCount) return;
+    lastGlossaCount = glossas.length;
+
+    glossasEl.innerHTML = '';
+    glossas.forEach(g => {
+      const chip = document.createElement('span');
+      chip.className = 'glossa-chip';
+      chip.textContent = g;
+      glossasEl.appendChild(chip);
+    });
+
+    btnTranslate.disabled = glossas.length === 0;
+  }
+
+  // --- MOSTRA TRADUÇÃO ---
+  function showTranslation(text) {
+    traducaoEl.innerHTML = `<p>${text || '<em>Sem resultado</em>'}</p>`;
+  }
+
+  // --- BOTÕES ---
+  btnTranslate.addEventListener('click', () => {
+    if (!wsReady) return;
+    btnTranslate.disabled = true;
+    btnTranslate.innerHTML = '<span class="spinner"></span>Traduzindo...';
+    ws.send(JSON.stringify({ action: 'translate' }));
+  });
+
+  btnClear.addEventListener('click', () => {
+    if (!wsReady) return;
+    lastGlossaCount = 0;
+    ws.send(JSON.stringify({ action: 'clear' }));
+  });
+</script>
+</body>
+</html>

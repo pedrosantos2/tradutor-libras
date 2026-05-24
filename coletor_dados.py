@@ -12,7 +12,12 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 # --- CONFIGURAÇÕES DE DIRETÓRIOS ---
-SIGNS = ["OI", "GOSTAR", "MANDIOCA"]
+SIGNS = [
+    "OI", "TCHAU", "EU", "NOME", "OBRIGADO", "SIM", "NAO",
+    "POR_FAVOR", "DESCULPA", "BEM", "GOSTAR", "AJUDA",
+    "ENTENDER", "NAO_ENTENDER", "REPETIR", "PRAZER", "AMIGO", "SURDO",
+    "MELANCIA", "LARANJA"
+]
 DATA_PATH = Path("DATA")
 for sign in SIGNS:
     (DATA_PATH / sign).mkdir(parents=True, exist_ok=True)
@@ -40,7 +45,7 @@ base_options = python.BaseOptions(model_asset_path=ensure_model_file())
 options = vision.HandLandmarkerOptions(
     base_options=base_options,
     running_mode=vision.RunningMode.IMAGE,
-    num_hands=1, # Focando em uma mão para simplificar o dataset inicial
+    num_hands=2,
     min_hand_detection_confidence=0.7,
 )
 hand_landmarker = vision.HandLandmarker.create_from_options(options)
@@ -53,9 +58,10 @@ frame_counter = 0
 sequence_data = []
 
 print("\n--- COMANDOS ---")
-print("1, 2, 3: Alternar entre OI, GOSTAR, MANDIOCA")
+print("← →: Navegar entre sinais")
 print("S: Gravar sequência de 30 frames")
 print("Q: Sair\n")
+print("Sinais disponíveis:", " | ".join(f"{i}:{s}" for i, s in enumerate(SIGNS)))
 
 while cap.isOpened():
     success, image = cap.read()
@@ -67,18 +73,17 @@ while cap.isOpened():
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
     results = hand_landmarker.detect(mp_image)
 
-    # Extração de coordenadas (Mesmo se não detectar, precisamos de zeros para manter o shape da rede neural)
-    current_frame_landmarks = np.zeros(63) # 21 pontos * 3 (x,y,z)
+    # 21 pontos * 3 coords * 2 mãos = 126
+    current_frame_landmarks = np.zeros(126)
 
     if results.hand_landmarks:
-        hand_points = results.hand_landmarks[0] # Pega a primeira mão
-        landmarks = []
-        for lm in hand_points:
-            landmarks.extend([lm.x, lm.y, lm.z])
-            # Desenha na tela para feedback
-            x_px, y_px = int(lm.x * image_w), int(lm.y * image_h)
-            cv2.circle(image, (x_px, y_px), 3, (0, 255, 0), -1)
-        current_frame_landmarks = np.array(landmarks)
+        all_pts = []
+        for hand in results.hand_landmarks[:2]:
+            for lm in hand:
+                all_pts.extend([lm.x, lm.y, lm.z])
+                x_px, y_px = int(lm.x * image_w), int(lm.y * image_h)
+                cv2.circle(image, (x_px, y_px), 3, (0, 255, 0), -1)
+        current_frame_landmarks[:len(all_pts)] = all_pts
 
     # --- LÓGICA DE GRAVAÇÃO ---
     if is_recording:
@@ -106,12 +111,14 @@ while cap.isOpened():
     cv2.imshow('Coletor LIBRAS-SC', image)
 
     key = cv2.waitKey(1) & 0xFF
-    if key == ord('q'): break
-    elif key == ord('1'): current_sign_idx = 0
-    elif key == ord('2'): current_sign_idx = 1
-    elif key == ord('3'): current_sign_idx = 2
+    if key == ord('q'):
+        break
+    elif key == 81 or key == ord('a'):  # seta esquerda ou A
+        current_sign_idx = (current_sign_idx - 1) % len(SIGNS)
+    elif key == 83 or key == ord('d'):  # seta direita ou D
+        current_sign_idx = (current_sign_idx + 1) % len(SIGNS)
     elif key == ord('s') and not is_recording:
-        print(f"🔴 Iniciando gravação de {SIGNS[current_sign_idx]}...")
+        print(f"Iniciando gravação de {SIGNS[current_sign_idx]}...")
         is_recording = True
 
 cap.release()

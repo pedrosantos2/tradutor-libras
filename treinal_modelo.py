@@ -4,11 +4,17 @@ from sklearn.model_selection import train_test_split
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 import tensorflow as tf
 
 # --- CONFIGURAÇÕES ---
 DATA_PATH = 'DATA'
-ACTIONS = np.array(['OI', 'GOSTAR', 'LARANJA', 'MELANCIA']) # Certifique-se de que as pastas correspondentes existem
+ACTIONS = np.array([
+    "OI", "TCHAU", "EU", "NOME", "OBRIGADO", "SIM", "NAO",
+    "POR_FAVOR", "DESCULPA", "BEM", "GOSTAR", "AJUDA",
+    "ENTENDER", "NAO_ENTENDER", "REPETIR", "PRAZER", "AMIGO", "SURDO",
+    "MELANCIA", "LARANJA"
+])
 EXPECTED_SHAPE = (30, 126) # 30 frames, 126 coordenadas (2 mãos)
 LABEL_MAP = {label:num for num, label in enumerate(ACTIONS)}
 
@@ -61,9 +67,17 @@ model = Sequential([
 ])
 model.compile(optimizer='Adam', loss='categorical_crossentropy', metrics=['categorical_accuracy'])
 
-print(f"\n--- TREINANDO COM {len(sequences)} SEQUÊNCIAS VÁLIDAS ---")
-model.fit(X_train, y_train, epochs=300, batch_size=8, validation_data=(X_test, y_test))
+callbacks = [
+    # Salva automaticamente o melhor modelo (maior val accuracy)
+    ModelCheckpoint('modelo_libras.h5', monitor='val_categorical_accuracy',
+                    mode='max', save_best_only=True, verbose=1),
+    # Para o treino se a val accuracy não melhorar por 40 epochs consecutivos
+    EarlyStopping(monitor='val_categorical_accuracy', patience=40,
+                  restore_best_weights=True, verbose=1),
+]
 
-# Salva o modelo
-model.save('modelo_libras.h5')
+print(f"\n--- TREINANDO COM {len(sequences)} SEQUÊNCIAS VÁLIDAS ---")
+model.fit(X_train, y_train, epochs=300, batch_size=8,
+          validation_data=(X_test, y_test), callbacks=callbacks)
+
 print("\n✅ Modelo salvo com sucesso!")

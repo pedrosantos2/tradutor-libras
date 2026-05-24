@@ -8,7 +8,11 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 # --- CONFIGURAÇÕES ---
-SIGNS = ["OI", "GOSTAR", "LARANJA", "MELANCIA"]
+SIGNS = [
+    "OI", "TCHAU", "EU", "NOME", "OBRIGADO", "SIM", "NAO",
+    "POR_FAVOR", "DESCULPA", "BEM", "GOSTAR", "AJUDA",
+    "ENTENDER", "NAO_ENTENDER", "REPETIR", "PRAZER", "AMIGO", "SURDO"
+]
 INPUT_BASE_FOLDER = Path("videos_baixados") # Onde estão os .mp4
 OUTPUT_BASE_FOLDER = Path("DATA")           # Onde sairão os .npy
 FRAME_COUNT = 30                            # Padrão da sua LSTM
@@ -50,11 +54,18 @@ def extrair_coords_do_video(video_path):
         
         coords = np.zeros(COORD_SIZE)
         if results.hand_landmarks:
-            all_pts = []
-            for hand in results.hand_landmarks[:2]:
-                for lm in hand:
-                    all_pts.extend([lm.x, lm.y, lm.z])
-            coords[:len(all_pts)] = all_pts
+            left_pts = [0.0] * 63
+            right_pts = [0.0] * 63
+            for hand_lms, handedness_list in zip(results.hand_landmarks, results.handedness):
+                label = handedness_list[0].category_name
+                pts = []
+                for lm in hand_lms:
+                    pts.extend([lm.x, lm.y, lm.z])
+                if label == "Left":
+                    left_pts = pts
+                else:
+                    right_pts = pts
+            coords[:] = left_pts + right_pts
         
         lista_frames.append(coords)
     
