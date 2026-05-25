@@ -9,7 +9,7 @@ import numpy as np
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-from config import COORD_SIZE, FRAME_WINDOW, SIGNS
+from config import COORD_SIZE, FRAME_WINDOW, MOVEMENT_FLOOR, SIGNS
 
 # --- CONFIGURAÇÕES ---
 INPUT_BASE_FOLDER = Path("videos_baixados")
@@ -36,19 +36,71 @@ options = vision.HandLandmarkerOptions(
 )
 detector = vision.HandLandmarker.create_from_options(options)
 
+_DETECTION_WINDOW = 5  # tamanho da janela para detectar segmento ativo
+
+
+def _find_active_segment(frames: np.ndarray) -> tuple[int, int] | None:
+    """
+    Detecta o trecho do vídeo onde há mão em movimento.
+    Retorna (inicio, fim) inclusivos, ou None se não encontrar.
+    """
+    n = len(frames)
+    if n < _DETECTION_WINDOW:
+        return None
+
+    hand_present = frames.any(axis=1)  # True onde alguma coord != 0
+
+    # norma L2 da diferença entre frames consecutivos (movimento)
+    movement = np.zeros(n)
+    movement[1:] = np.linalg.norm(np.diff(frames, axis=0), axis=1)
+
+    def is_active(i: int) -> bool:
+        seg = slice(i, min(i + _DETECTION_WINDOW, n))
+        return (hand_present[seg].sum() >= _DETECTION_WINDOW - 1 and
+                movement[seg].mean() > MOVEMENT_FLOOR)
+
+    # Varredura forward: início do segmento
+    start = None
+    for i in range(n - _DETECTION_WINDOW + 1):
+        if is_active(i):
+            start = i
+            break
+
+    if start is None:
+        return None
+
+    # Varredura backward: fim do segmento
+    end = start
+    for i in range(n - _DETECTION_WINDOW, start - 1, -1):
+        if is_active(i):
+            end = min(i + _DETECTION_WINDOW - 1, n - 1)
+            break
+
+    if end <= start:
+        return None
+
+    return start, end
+
+
+def _resample(frames: np.ndarray, target: int) -> np.ndarray:
+    """Reamostrar uniformemente para exatamente `target` frames."""
+    idxs = np.linspace(0, len(frames) - 1, target).astype(int)
+    return frames[idxs]
+
+
 def extrair_coords_do_video(video_path):
     cap = cv2.VideoCapture(str(video_path))
     lista_frames = []
-    
+
     while cap.isOpened():
         ret, frame = cap.read()
-        if not ret: break
-        
-        # Processamento
+        if not ret:
+            break
+
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
         results = detector.detect(mp_image)
-        
+
         coords = np.zeros(COORD_SIZE)
         if results.hand_landmarks:
             left_pts = [0.0] * 63
@@ -63,35 +115,32 @@ def extrair_coords_do_video(video_path):
                 else:
                     right_pts = pts
             coords[:] = left_pts + right_pts
-        
+
         lista_frames.append(coords)
-    
+
     cap.release()
-    
-    # --- NORMALIZAÇÃO INTELIGENTE (O CORTE DO MEIO) ---
-    total_frames = len(lista_frames)
-    
-    if total_frames == 0:
+
+    if not lista_frames:
         return None
 
-    if total_frames > FRAME_COUNT:
-        # Acha o meio exato do vídeo e pega 15 frames pra trás e 15 pra frente
-        meio = total_frames // 2
-        inicio = max(0, meio - (FRAME_COUNT // 2))
-        fim = inicio + FRAME_COUNT
-        
-        recorte = lista_frames[inicio:fim]
-        
-        # Só por segurança, se faltar algum frame no final da matemática, ele repete
-        while len(recorte) < FRAME_COUNT:
-            recorte.append(recorte[-1])
-            
-        return np.array(recorte)
+    frames_arr = np.array(lista_frames)  # (n, 126)
+
+    segment = _find_active_segment(frames_arr)
+
+    if segment is not None:
+        start, end = segment
+        recorte = frames_arr[start:end + 1]
     else:
-        # Se o vídeo for super curto (menos de 30 frames), repete o último frame até dar 30
-        while len(lista_frames) < FRAME_COUNT:
-            lista_frames.append(lista_frames[-1])
-        return np.array(lista_frames)
+        # Fallback: corte geométrico do meio
+        n = len(frames_arr)
+        meio = n // 2
+        inicio = max(0, meio - (FRAME_COUNT // 2))
+        recorte = frames_arr[inicio:inicio + FRAME_COUNT]
+        if len(recorte) < 2:
+            return None
+        print(f"    ⚠️  segmento ativo não encontrado, usando corte do meio")
+
+    return _resample(recorte, FRAME_COUNT)
 
 # --- LOOP PRINCIPAL PELAS PASTAS ---
 print("\n🔄 Iniciando processamento de vídeos...\n")
@@ -119,4 +168,4 @@ for sign in SIGNS:
             print(f"❌ Erro ao processar {v_name}: {e}")
 
 detector.close()
-print("\n✅ Processamento concluído! O 'miolo' da ação foi extraído com sucesso.")
+print("\n✅ Processamento concluído!")
