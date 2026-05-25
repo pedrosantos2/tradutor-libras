@@ -1,22 +1,20 @@
+import os
+import ssl
+from pathlib import Path
+from urllib.request import urlopen
+
 import cv2
 import mediapipe as mp
 import numpy as np
-import os
-from pathlib import Path
-from urllib.request import urlopen
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
+from config import COORD_SIZE, FRAME_WINDOW, SIGNS
+
 # --- CONFIGURAÇÕES ---
-SIGNS = [
-    "OI", "TCHAU", "EU", "NOME", "OBRIGADO", "SIM", "NAO",
-    "POR_FAVOR", "DESCULPA", "BEM", "GOSTAR", "AJUDA",
-    "ENTENDER", "NAO_ENTENDER", "REPETIR", "PRAZER", "AMIGO", "SURDO"
-]
-INPUT_BASE_FOLDER = Path("videos_baixados") # Onde estão os .mp4
-OUTPUT_BASE_FOLDER = Path("DATA")           # Onde sairão os .npy
-FRAME_COUNT = 30                            # Padrão da sua LSTM
-COORD_SIZE = 126                            # 2 mãos (21*3*2)
+INPUT_BASE_FOLDER = Path("videos_baixados")
+OUTPUT_BASE_FOLDER = Path("DATA")
+FRAME_COUNT = FRAME_WINDOW
 
 MODEL_PATH = Path("hand_landmarker.task")
 MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
@@ -24,7 +22,6 @@ MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/han
 # --- GARANTIR O MODELO ---
 if not MODEL_PATH.exists():
     print("Baixando modelo hand_landmarker.task...")
-    import ssl
     context = ssl._create_unverified_context()
     with urlopen(MODEL_URL, timeout=30, context=context) as response:
         MODEL_PATH.write_bytes(response.read())

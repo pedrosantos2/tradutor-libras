@@ -1,26 +1,32 @@
+from pathlib import Path
+
 import cv2
 import mediapipe as mp
 import numpy as np
 import requests
-from pathlib import Path
-from tensorflow.keras.models import load_model
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+from tensorflow.keras.models import load_model
 
-# --- CONFIGURAÇÕES ---
-ACTIONS = [
-    "OI", "TCHAU", "EU", "NOME", "OBRIGADO", "SIM", "NAO",
-    "POR_FAVOR", "DESCULPA", "BEM", "GOSTAR", "AJUDA",
-    "ENTENDER", "NAO_ENTENDER", "REPETIR", "PRAZER", "AMIGO", "SURDO",
-    "MELANCIA", "LARANJA"
-]
-model_lstm = load_model('modelo_libras.h5')
-MODEL_PATH = Path("hand_landmarker.task")
-COORD_SIZE = 126
-FRAME_WINDOW = 30
+import config as cfg
 
-# Threshold de confiança mínima para aceitar predição
-threshold = 0.88
+# --- CARREGA MODELO ---
+_keras = Path(cfg.MODEL_PATH)
+_h5 = Path(cfg.LEGACY_MODEL_PATH)
+if _keras.exists():
+    model_lstm = load_model(str(_keras))
+elif _h5.exists():
+    model_lstm = load_model(str(_h5))
+else:
+    raise FileNotFoundError("Nenhum modelo encontrado (modelo_libras.keras ou .h5)")
+
+n_classes = model_lstm.output_shape[-1]
+ACTIONS = cfg.load_labels(n_classes)
+
+MODEL_PATH = Path(cfg.HAND_LANDMARKER_MODEL)
+COORD_SIZE = cfg.COORD_SIZE
+FRAME_WINDOW = cfg.FRAME_WINDOW
+threshold = cfg.THRESHOLD
 # Desvio padrão mínimo das coordenadas ao longo dos frames (detecta movimento real)
 MOVEMENT_THRESHOLD = 0.008
 # Quantas predições consecutivas do mesmo sinal são necessárias para confirmar

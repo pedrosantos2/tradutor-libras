@@ -1,15 +1,13 @@
-import numpy as np
 import os
 import random
 from pathlib import Path
 
+import numpy as np
+
+from config import SIGNS as ACTIONS
+
 # --- CONFIGURAÇÕES ---
 DATA_PATH = Path("DATA")
-ACTIONS = [
-    "OI", "TCHAU", "EU", "NOME", "OBRIGADO", "SIM", "NAO",
-    "POR_FAVOR", "DESCULPA", "BEM", "GOSTAR", "AJUDA",
-    "ENTENDER", "NAO_ENTENDER", "REPETIR", "PRAZER", "AMIGO", "SURDO"
-]
 VARIACOES_POR_ARQUIVO = 10  # Para cada arquivo original, cria 10 novos
 
 def aplicar_augment(dados_originais):

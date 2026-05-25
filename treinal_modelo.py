@@ -1,22 +1,20 @@
-import numpy as np
 import os
-from sklearn.model_selection import train_test_split
-from tensorflow.keras.utils import to_categorical
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+
+import numpy as np
 import tensorflow as tf
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.utils import to_categorical
+
+from config import COORD_SIZE, FRAME_WINDOW, SIGNS
 
 # --- CONFIGURAÇÕES ---
 DATA_PATH = 'DATA'
-ACTIONS = np.array([
-    "OI", "TCHAU", "EU", "NOME", "OBRIGADO", "SIM", "NAO",
-    "POR_FAVOR", "DESCULPA", "BEM", "GOSTAR", "AJUDA",
-    "ENTENDER", "NAO_ENTENDER", "REPETIR", "PRAZER", "AMIGO", "SURDO",
-    "MELANCIA", "LARANJA"
-])
-EXPECTED_SHAPE = (30, 126) # 30 frames, 126 coordenadas (2 mãos)
-LABEL_MAP = {label:num for num, label in enumerate(ACTIONS)}
+ACTIONS = np.array(SIGNS)
+EXPECTED_SHAPE = (FRAME_WINDOW, COORD_SIZE)
+LABEL_MAP = {label: num for num, label in enumerate(ACTIONS)}
 
 sequences, labels = [], []
 

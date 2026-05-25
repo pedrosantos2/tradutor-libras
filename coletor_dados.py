@@ -1,23 +1,14 @@
+import time
+from pathlib import Path
+from urllib.request import urlopen
+
 import cv2
 import mediapipe as mp
 import numpy as np
-import importlib
-import os
-import ssl
-import time
-from pathlib import Path
-from urllib.error import URLError
-from urllib.request import urlopen
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-# --- CONFIGURAÇÕES DE DIRETÓRIOS ---
-SIGNS = [
-    "OI", "TCHAU", "EU", "NOME", "OBRIGADO", "SIM", "NAO",
-    "POR_FAVOR", "DESCULPA", "BEM", "GOSTAR", "AJUDA",
-    "ENTENDER", "NAO_ENTENDER", "REPETIR", "PRAZER", "AMIGO", "SURDO",
-    "MELANCIA", "LARANJA"
-]
+from config import SIGNS
 DATA_PATH = Path("DATA")
 for sign in SIGNS:
     (DATA_PATH / sign).mkdir(parents=True, exist_ok=True)

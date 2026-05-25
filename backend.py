@@ -13,22 +13,26 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from tensorflow.keras.models import load_model
 
+import config as cfg
+
 # --- CONFIGURAÇÕES ---
-ACTIONS = [
-    "OI", "TCHAU", "EU", "NOME", "OBRIGADO", "SIM", "NAO",
-    "POR_FAVOR", "DESCULPA", "BEM", "GOSTAR", "AJUDA",
-    "ENTENDER", "NAO_ENTENDER", "REPETIR", "PRAZER", "AMIGO", "SURDO",
-]
-FRAME_WINDOW = 30
-COORD_SIZE = 126
-THRESHOLD = 0.85
-MODEL_PATH = Path("hand_landmarker.task")
+FRAME_WINDOW = cfg.FRAME_WINDOW
+COORD_SIZE = cfg.COORD_SIZE
+THRESHOLD = cfg.THRESHOLD
+MODEL_PATH = Path(cfg.HAND_LANDMARKER_MODEL)
 
 # --- CARREGA MODELO ---
-model_lstm = load_model("modelo_libras.h5")
-# Usa o número de classes que o modelo foi treinado, não a lista acima
+_keras = Path(cfg.MODEL_PATH)
+_h5 = Path(cfg.LEGACY_MODEL_PATH)
+if _keras.exists():
+    model_lstm = load_model(str(_keras))
+elif _h5.exists():
+    model_lstm = load_model(str(_h5))
+else:
+    raise FileNotFoundError("Nenhum modelo encontrado (modelo_libras.keras ou .h5)")
+
 n_classes = model_lstm.output_shape[-1]
-ACTIONS = ACTIONS[:n_classes]
+ACTIONS = cfg.load_labels(n_classes)
 
 # --- SETUP MEDIAPIPE ---
 base_options = python.BaseOptions(model_asset_path=str(MODEL_PATH))
@@ -51,13 +55,13 @@ def chamar_ollama(glossas: list) -> str:
     prompt = f"Converta estas glossas de LIBRAS para português fluído: {glossas}"
     try:
         resp = requests.post(
-            "http://localhost:11434/api/generate",
-            json={"model": "tradutor-sc", "prompt": prompt, "stream": False},
+            cfg.OLLAMA_URL,
+            json={"model": cfg.OLLAMA_MODEL, "prompt": prompt, "stream": False},
             timeout=30,
         )
         return resp.json().get("response", "").strip()
-    except Exception as e:
-        return f"Erro Ollama: {e}"
+    except Exception:
+        return " ".join(glossas).lower().capitalize() + "."
 
 
 # --- FASTAPI ---
