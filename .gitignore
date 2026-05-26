@@ -5,5 +5,11 @@ __pycache__/
 *.pyd
 *.npy
 *.h5
+*.keras
 *.task
 .DS_Store
+
+# frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/

@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; }
+
+@theme {
+  --animate-pop: pop 0.15s ease;
+}
+
+@keyframes pop {
+  from { transform: scale(0.8); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
