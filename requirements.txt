@@ -1,0 +1,16 @@
+# Runtime — backend
+fastapi>=0.136
+uvicorn[standard]>=0.47
+tensorflow>=2.21
+mediapipe>=0.10.33
+opencv-python>=4.13
+numpy>=2.4
+requests>=2.33
+python-dotenv>=1.2
+python-multipart>=0.0.29
+
+# Treino / scripts de dados
+scikit-learn>=1.8
+
+# Download de vídeos (opcional, para baixar_videos.py)
+# pip install yt-dlp

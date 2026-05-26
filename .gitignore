@@ -8,6 +8,7 @@ __pycache__/
 *.keras
 *.task
 .DS_Store
+.env
 
 # frontend
 frontend/node_modules/
