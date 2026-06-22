@@ -1,5 +1,9 @@
+import os
+import sys
 import time
 from pathlib import Path
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from urllib.request import urlopen
 
 import cv2
